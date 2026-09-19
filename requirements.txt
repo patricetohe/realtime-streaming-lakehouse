@@ -1,0 +1,6 @@
+kafka-python
+pydantic
+faker
+pyspark
+delta-spark
+pytest

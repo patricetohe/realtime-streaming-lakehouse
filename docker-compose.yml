@@ -1,0 +1,19 @@
+# Local dev stack: Redpanda (Kafka-compatible broker), single node.
+# `docker compose up -d` to start. Spark service to be added as the roadmap progresses.
+version: "3.8"
+services:
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: redpanda
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://localhost:9092
+    ports:
+      - "9092:9092"
