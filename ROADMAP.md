@@ -2,7 +2,7 @@
 
 Small, incremental steps — roughly one per day. Check items off as they land; each one is its own commit/PR.
 
-- [ ] Docker Compose: Redpanda broker + topic bootstrap script
+- [x] Docker Compose: Redpanda broker + topic bootstrap script
 - [ ] Python producer simulating e-commerce clickstream events (JSON schema)
 - [ ] Event schema definition + validation (pydantic)
 - [ ] Spark Structured Streaming job: read from Kafka, parse JSON
