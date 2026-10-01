@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # Scoped to what the current unit tests need (they mock Kafka/Spark/etc.
+      # rather than talking to a real broker), not the full requirements.txt —
+      # keeps CI fast and reliable. Expand as roadmap items add real
+      # integration coverage.
+      - name: Install test dependencies
+        run: pip install pytest kafka-python faker
+
+      - name: Run unit tests
+        run: pytest -q

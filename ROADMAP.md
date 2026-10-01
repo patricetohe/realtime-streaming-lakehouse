@@ -14,7 +14,7 @@ Small, incremental steps — roughly one per day. Check items off as they land; 
 - [ ] Great Expectations suite validating gold layer row counts / nulls
 - [ ] Unit tests for producer event generation
 - [ ] Unit tests for streaming transformation logic
-- [ ] GitHub Actions CI: run unit tests on every PR
+- [x] GitHub Actions CI: run unit tests on every PR
 - [ ] Architecture decision record: why Delta Lake over Iceberg here
 - [ ] Checkpointing + exactly-once semantics notes and config
 - [ ] Streamlit dashboard reading the gold layer for live metrics
