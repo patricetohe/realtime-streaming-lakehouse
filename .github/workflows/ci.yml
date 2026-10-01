@@ -31,7 +31,7 @@ jobs:
           code=$?
           cat /tmp/pytest_out.txt
           if [ $code -ne 0 ]; then
-            msg=$(tail -c 900 /tmp/pytest_out.txt | sed ':a;N;$!ba;s/\n/%0A/g')
+            msg=$(awk '/ERRORS/,/short test summary/' /tmp/pytest_out.txt | head -c 1800 | sed ':a;N;$!ba;s/\n/%0A/g')
             echo "::error::$msg"
           fi
           exit $code
