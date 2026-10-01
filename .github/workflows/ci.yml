@@ -17,38 +17,21 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Show versions
-        run: |
-          python --version
-          pip --version
-
       # Scoped to what the current unit tests need (they mock Kafka/Spark/etc.
       # rather than talking to a real broker), not the full requirements.txt —
       # keeps CI fast and reliable. Expand as roadmap items add real
       # integration coverage.
       - name: Install test dependencies
-        run: |
-          pip install pytest kafka-python faker
-          pip freeze
+        run: pip install pytest kafka-python faker
 
       - name: Run unit tests
-        run: pytest -q -ra
-
-      - name: Debug - report failure to PR
-        if: failure() && github.event_name == 'pull_request'
         run: |
-          python --version > /tmp/debug.log 2>&1
-          pip freeze >> /tmp/debug.log 2>&1
-          echo "---pytest---" >> /tmp/debug.log
-          pytest -q -ra --tb=long >> /tmp/debug.log 2>&1 || true
-          BODY=$(python3 -c "
-import json
-with open('/tmp/debug.log') as f:
-    content = f.read()[-5000:]
-print(json.dumps({'body': '### CI debug output\n```\n' + content + '\n```'}))
-")
-          curl -s -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
-            -d "$BODY"
+          set +e
+          pytest -q -ra --tb=long > /tmp/pytest_out.txt 2>&1
+          code=$?
+          cat /tmp/pytest_out.txt
+          if [ $code -ne 0 ]; then
+            msg=$(tail -c 900 /tmp/pytest_out.txt | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error::$msg"
+          fi
+          exit $code
