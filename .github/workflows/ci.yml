@@ -25,13 +25,4 @@ jobs:
         run: pip install pytest kafka-python faker
 
       - name: Run unit tests
-        run: |
-          set +e
-          pytest -q -ra --tb=long > /tmp/pytest_out.txt 2>&1
-          code=$?
-          cat /tmp/pytest_out.txt
-          if [ $code -ne 0 ]; then
-            msg=$(awk '/ERRORS/,/short test summary/' /tmp/pytest_out.txt | head -c 1800 | sed ':a;N;$!ba;s/\n/%0A/g')
-            echo "::error::$msg"
-          fi
-          exit $code
+        run: pytest -q
