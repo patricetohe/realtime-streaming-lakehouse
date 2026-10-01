@@ -1,5 +1,18 @@
-# Local dev stack: Redpanda (Kafka-compatible broker), single node.
-# `docker compose up -d` to start. Spark service to be added as the roadmap progresses.
+# Local dev stack: Redpanda (Kafka-compatible broker), single node,
+# plus a one-shot topic bootstrap job. Spark service to be added as
+# the roadmap progresses.
+#
+# Two listeners are exposed so both host-run tools (e.g. the producer,
+# run directly on your machine) and other containers on the compose
+# network can reach the broker with the address that actually works
+# for them:
+#   - internal://redpanda:9092   used by other containers (topic-init, and
+#                                  later the Spark job)
+#   - external://localhost:19092 used by anything running on the host
+#
+# `docker compose up -d` starts Redpanda and then runs `topic-init`
+# once to create the topics the pipeline needs (idempotent — safe to
+# re-run on every `up`).
 version: "3.8"
 services:
   redpanda:
@@ -13,7 +26,21 @@ services:
       - --overprovisioned
       - --node-id=0
       - --check=false
-      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
-      - --advertise-kafka-addr=PLAINTEXT://localhost:9092
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
     ports:
-      - "9092:9092"
+      - "19092:19092"
+
+  topic-init:
+    image: python:3.11-slim
+    container_name: topic-init
+    depends_on:
+      - redpanda
+    volumes:
+      - ./scripts:/scripts:ro
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+    command: >
+      sh -c "pip install --no-cache-dir --quiet kafka-python &&
+             python /scripts/bootstrap_topics.py"
+    restart: "no"
