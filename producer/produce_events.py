@@ -26,6 +26,9 @@ from datetime import datetime, timezone
 
 from faker import Faker
 from kafka import KafkaProducer
+from pydantic import ValidationError
+
+from producer.schema import validate_event
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("produce_events")
@@ -76,11 +79,12 @@ def event_to_json(event):
 class ClickstreamProducer:
     """Thin wrapper around KafkaProducer for publishing clickstream events."""
 
-    def __init__(self, bootstrap_servers=None, topic=None, client=None):
+    def __init__(self, bootstrap_servers=None, topic=None, client=None, validate=True):
         self.bootstrap_servers = bootstrap_servers or os.environ.get(
             "KAFKA_BOOTSTRAP_SERVERS", DEFAULT_BOOTSTRAP_SERVERS
         )
         self.topic = topic or DEFAULT_TOPIC
+        self.validate = validate
         # Allow a pre-built client to be injected (used by tests to avoid
         # needing a real broker).
         self._producer = client or KafkaProducer(
@@ -89,7 +93,18 @@ class ClickstreamProducer:
         )
 
     def send(self, event):
-        """Publish a single event dict to the configured topic."""
+        """Validate (unless disabled) and publish a single event dict.
+
+        Raises ``pydantic.ValidationError`` instead of publishing when the
+        event doesn't match the ``ClickstreamEvent`` schema, so malformed
+        events never reach the broker silently.
+        """
+        if self.validate:
+            try:
+                validate_event(event)
+            except ValidationError:
+                logger.error("Dropping invalid event (failed schema validation): %s", event)
+                raise
         self._producer.send(self.topic, value=event)
 
     def run(self, num_events, delay_seconds=0.0):
