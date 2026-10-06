@@ -4,7 +4,7 @@ Small, incremental steps — roughly one per day. Check items off as they land; 
 
 - [x] Docker Compose: Redpanda broker + topic bootstrap script
 - [x] Python producer simulating e-commerce clickstream events (JSON schema)
-- [ ] Event schema definition + validation (pydantic)
+- [x] Event schema definition + validation (pydantic)
 - [ ] Spark Structured Streaming job: read from Kafka, parse JSON
 - [ ] Watermarking + 5-minute tumbling window aggregation (events per category)
 - [ ] Write raw events to Delta Lake bronze layer
