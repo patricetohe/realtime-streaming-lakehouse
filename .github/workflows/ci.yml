@@ -17,12 +17,21 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      # Scoped to what the current unit tests need (they mock Kafka/Spark/etc.
-      # rather than talking to a real broker), not the full requirements.txt —
-      # keeps CI fast and reliable. Expand as roadmap items add real
-      # integration coverage.
+      # pyspark needs a JVM; the streaming-job tests run a local-mode
+      # SparkSession (no broker, no cluster).
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Scoped to what the current unit tests need (they stand in for Kafka
+      # with plain DataFrames rather than talking to a real broker), not the
+      # full requirements.txt -- keeps CI fast and reliable. Expand as roadmap
+      # items add real integration coverage.
       - name: Install test dependencies
-        run: pip install pytest kafka-python faker
+        run: pip install pytest kafka-python faker pyspark
 
       - name: Run unit tests
         run: pytest -q
+        env:
+          SPARK_LOCAL_IP: 127.0.0.1
