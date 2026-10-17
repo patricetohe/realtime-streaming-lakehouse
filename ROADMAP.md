@@ -6,7 +6,7 @@ Small, incremental steps — roughly one per day. Check items off as they land; 
 - [x] Python producer simulating e-commerce clickstream events (JSON schema)
 - [x] Event schema definition + validation (pydantic)
 - [x] Spark Structured Streaming job: read from Kafka, parse JSON
-- [ ] Watermarking + 5-minute tumbling window aggregation (events per category)
+- [x] Watermarking + 5-minute tumbling window aggregation (events per category)
 - [ ] Write raw events to Delta Lake bronze layer
 - [ ] Silver layer: dedupe, cast types, add ingestion_ts
 - [ ] dbt project scaffold pointed at the lakehouse tables
