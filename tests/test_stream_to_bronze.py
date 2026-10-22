@@ -19,16 +19,31 @@ from producer.produce_events import generate_event  # noqa: E402
 from streaming_job.stream_to_bronze import (  # noqa: E402
     aggregate_events_per_category,
     parse_events,
+    write_to_bronze,
 )
+
+
+try:
+    from delta import configure_spark_with_delta_pip  # noqa: E402
+except ImportError:  # delta-spark not installed in this environment
+    configure_spark_with_delta_pip = None
 
 
 @pytest.fixture(scope="module")
 def spark():
-    session = (
-        SparkSession.builder.appName("test-stream-to-bronze")
-        .master("local[1]")
-        .getOrCreate()
-    )
+    builder = SparkSession.builder.appName("test-stream-to-bronze").master("local[1]")
+    if configure_spark_with_delta_pip is not None:
+        # Register Delta's SQL extensions/catalog so format("delta") reads
+        # and writes work in write_to_bronze's tests, same config a real
+        # Delta-backed job would use.
+        builder = builder.config(
+            "spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension"
+        ).config(
+            "spark.sql.catalog.spark_catalog",
+            "org.apache.spark.sql.delta.catalog.DeltaCatalog",
+        )
+        builder = configure_spark_with_delta_pip(builder)
+    session = builder.getOrCreate()
     yield session
     session.stop()
 
@@ -136,3 +151,36 @@ def test_aggregate_events_per_category_output_columns(spark):
         "category",
         "event_count",
     }
+
+
+def test_write_to_bronze_persists_parsed_events_as_delta(spark, tmp_path):
+    pytest.importorskip("delta", reason="delta-spark not installed")
+
+    events = [generate_event() for _ in range(3)]
+    raw_df = _raw_df(spark, events)
+    parsed = parse_events(raw_df)
+    bronze_path = str(tmp_path / "bronze" / "clickstream_events")
+
+    result = write_to_bronze(parsed, bronze_path=bronze_path)
+
+    assert result is None  # batch write path: no streaming query to hand back
+    written = spark.read.format("delta").load(bronze_path)
+    assert {row["event_id"] for row in written.collect()} == {
+        e["event_id"] for e in events
+    }
+
+
+def test_write_to_bronze_appends_across_multiple_batches(spark, tmp_path):
+    pytest.importorskip("delta", reason="delta-spark not installed")
+
+    first_batch = [generate_event() for _ in range(2)]
+    second_batch = [generate_event() for _ in range(2)]
+    bronze_path = str(tmp_path / "bronze" / "clickstream_events")
+
+    write_to_bronze(parse_events(_raw_df(spark, first_batch)), bronze_path=bronze_path)
+    write_to_bronze(parse_events(_raw_df(spark, second_batch)), bronze_path=bronze_path)
+
+    written = spark.read.format("delta").load(bronze_path)
+    expected_ids = {e["event_id"] for e in first_batch + second_batch}
+    assert {row["event_id"] for row in written.collect()} == expected_ids
+    assert written.count() == 4

@@ -14,15 +14,23 @@ windows per `category`, counting events per (window, category). This
 bounds how much streaming state Spark has to keep around for late
 events: once the watermark passes a window's end, that window's state
 can be dropped. `run_windowed_aggregation` wires this into a second
-streaming query (console sink, for now -- the Delta Lake bronze/silver
-writes are separate, later ROADMAP increments).
+streaming query (console sink; the silver/gold writes are separate,
+later ROADMAP increments).
 
-Full execution requires a running Spark runtime and a reachable
-Kafka/Redpanda broker (`docker compose up -d`); the schema/parsing and
-aggregation logic itself has no such dependency and is covered by
-tests/test_stream_to_bronze.py, which exercises `parse_events` and
-`aggregate_events_per_category` against a local-mode SparkSession and a
-batch (non-streaming) DataFrame standing in for a micro-batch of Kafka
+`write_to_bronze` persists parsed events to the Delta Lake bronze table
+(append-only, raw/untransformed) and `run_bronze` wires the full
+read-Kafka -> parse-JSON -> write-Delta-bronze pipeline together. This
+is the durable landing zone the silver layer will later dedupe/clean
+from.
+
+Full execution requires a running Spark runtime (with the `delta-spark`
+package available so `format("delta")` is registered) and a reachable
+Kafka/Redpanda broker (`docker compose up -d`); the schema/parsing,
+aggregation, and bronze-write logic itself has no streaming-broker
+dependency and is covered by tests/test_stream_to_bronze.py, which
+exercises `parse_events`, `aggregate_events_per_category`, and
+`write_to_bronze` against a local-mode SparkSession and a batch
+(non-streaming) DataFrame standing in for a micro-batch of Kafka
 records.
 """
 import os
@@ -35,6 +43,8 @@ DEFAULT_BOOTSTRAP_SERVERS = "redpanda:9092"
 DEFAULT_TOPIC = "clickstream-events"
 DEFAULT_WINDOW_DURATION = "5 minutes"
 DEFAULT_WATERMARK_DELAY = "10 minutes"
+DEFAULT_BRONZE_PATH = "data/lakehouse/bronze/clickstream_events"
+DEFAULT_BRONZE_CHECKPOINT_PATH = "data/lakehouse/_checkpoints/bronze_clickstream_events"
 
 # Mirrors producer.schema.ClickstreamEvent. Kept independent of pydantic
 # here (the Spark job runs in a different process/environment than the
@@ -190,6 +200,82 @@ def run_windowed_aggregation(
     if trigger_interval:
         writer = writer.trigger(processingTime=trigger_interval)
     return writer.start()
+
+
+def write_to_bronze(
+    parsed_df,
+    bronze_path=None,
+    checkpoint_path=None,
+    output_mode="append",
+    trigger_interval=None,
+):
+    """Persist parsed clickstream events to the Delta Lake bronze table.
+
+    The bronze layer is the raw, append-only landing zone: events land
+    here as-is (already parsed/typed by `parse_events`, but otherwise
+    untransformed -- no dedup, no casting beyond what parsing already
+    does). Silver-layer dedup/cleanup is a separate, later ROADMAP
+    increment.
+
+    Dispatches on `parsed_df.isStreaming` so the same function works for
+    both the real streaming job and unit tests:
+
+    - Streaming DataFrame: starts a `writeStream` query writing to
+      `bronze_path` in Delta format, using `checkpoint_path` to track
+      progress (required for exactly-once/resumable streaming writes).
+      Returns the running `StreamingQuery`.
+    - Batch DataFrame (e.g. a micro-batch stand-in used in tests): does
+      a plain `write.format("delta")` to `bronze_path` and returns
+      `None`, since there is no query to hand back.
+
+    `bronze_path`/`checkpoint_path` default to `DEFAULT_BRONZE_PATH` /
+    `DEFAULT_BRONZE_CHECKPOINT_PATH`, overridable via the `BRONZE_PATH` /
+    `BRONZE_CHECKPOINT_PATH` environment variables or direct arguments
+    (tests pass a temp directory explicitly).
+    """
+    bronze_path = bronze_path or os.environ.get("BRONZE_PATH", DEFAULT_BRONZE_PATH)
+
+    if parsed_df.isStreaming:
+        checkpoint_path = checkpoint_path or os.environ.get(
+            "BRONZE_CHECKPOINT_PATH", DEFAULT_BRONZE_CHECKPOINT_PATH
+        )
+        writer = (
+            parsed_df.writeStream.format("delta")
+            .option("checkpointLocation", checkpoint_path)
+            .outputMode(output_mode)
+        )
+        if trigger_interval:
+            writer = writer.trigger(processingTime=trigger_interval)
+        return writer.start(bronze_path)
+
+    parsed_df.write.format("delta").mode(output_mode).save(bronze_path)
+    return None
+
+
+def run_bronze(
+    bootstrap_servers=None,
+    topic=None,
+    bronze_path=None,
+    checkpoint_path=None,
+    trigger_interval=None,
+):
+    """Build and start the read-Kafka -> parse-JSON -> write-Delta-bronze query.
+
+    This is the bronze-layer counterpart to `run` (console sink) and
+    `run_windowed_aggregation` (windowed console sink): same Kafka
+    source and JSON parsing, but the sink is the Delta Lake bronze table
+    instead of the console. Returns the running `StreamingQuery` so
+    callers can `.awaitTermination()` or stop it.
+    """
+    spark = build_spark_session()
+    raw = read_kafka_stream(spark, bootstrap_servers=bootstrap_servers, topic=topic)
+    parsed = parse_events(raw)
+    return write_to_bronze(
+        parsed,
+        bronze_path=bronze_path,
+        checkpoint_path=checkpoint_path,
+        trigger_interval=trigger_interval,
+    )
 
 
 def main():
