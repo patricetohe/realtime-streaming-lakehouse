@@ -8,7 +8,7 @@ Small, incremental steps — roughly one per day. Check items off as they land; 
 - [x] Spark Structured Streaming job: read from Kafka, parse JSON
 - [x] Watermarking + 5-minute tumbling window aggregation (events per category)
 - [x] Write raw events to Delta Lake bronze layer
-- [ ] Silver layer: dedupe, cast types, add ingestion_ts
+- [x] Silver layer: dedupe, cast types, add ingestion_ts
 - [ ] dbt project scaffold pointed at the lakehouse tables
 - [ ] Gold layer: dbt model aggregating sessions per user
 - [ ] Great Expectations suite validating gold layer row counts / nulls
