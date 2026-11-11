@@ -1,0 +1,20 @@
+# Example dbt profile for this project. Copy to ~/.dbt/profiles.yml (or
+# point DBT_PROFILES_DIR at a directory containing a copy of this file)
+# and adjust as needed -- this file itself is never read by dbt and is
+# not expected to contain real credentials.
+#
+# Uses dbt-spark's "session" connection method: dbt drives the same
+# local/standalone SparkSession the streaming jobs use (rather than a
+# Thrift server or Databricks cluster), so it only works when run from
+# a process that has pyspark + delta-spark available, consistent with
+# how streaming_job/ is run today (`spark-submit ...`, no Spark
+# service in docker-compose.yml yet). Swap `method` to `thrift` or
+# `odbc` here if/when a real Spark cluster is stood up.
+realtime_streaming_lakehouse:
+  target: dev
+  outputs:
+    dev:
+      type: spark
+      method: session
+      schema: default
+      host: NA

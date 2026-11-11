@@ -1,0 +1,39 @@
+version: 2
+
+sources:
+  - name: lakehouse
+    description: >
+      Delta Lake tables written by the Spark Structured Streaming job
+      (see streaming_job/). Registered as external tables by the
+      create_external_lakehouse_tables on-run-start macro, pointed at
+      the paths configured in dbt_project.yml's bronze_path/silver_path
+      vars.
+    tables:
+      - name: bronze_clickstream_events
+        description: >
+          Raw, append-only clickstream events as landed by
+          stream_to_bronze.write_to_bronze -- parsed/typed but otherwise
+          untransformed (no dedup, no casting beyond JSON parsing).
+        columns:
+          - name: event_id
+          - name: user_id
+          - name: session_id
+          - name: event_type
+          - name: category
+          - name: product_id
+          - name: price
+          - name: timestamp
+      - name: silver_clickstream_events
+        description: >
+          Deduped, type-cast clickstream events with an ingestion_ts
+          column, as produced by stream_to_silver.write_to_silver.
+        columns:
+          - name: event_id
+          - name: user_id
+          - name: session_id
+          - name: event_type
+          - name: category
+          - name: product_id
+          - name: price
+          - name: timestamp
+          - name: ingestion_ts

@@ -4,3 +4,6 @@ faker
 pyspark
 delta-spark
 pytest
+PyYAML
+dbt-core
+dbt-spark[session]

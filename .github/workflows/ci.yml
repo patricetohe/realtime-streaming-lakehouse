@@ -29,7 +29,7 @@ jobs:
       # full requirements.txt -- keeps CI fast and reliable. Expand as roadmap
       # items add real integration coverage.
       - name: Install test dependencies
-        run: pip install pytest kafka-python faker pyspark
+        run: pip install pytest kafka-python faker pyspark PyYAML
 
       - name: Run unit tests
         run: pytest -q

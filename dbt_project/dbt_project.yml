@@ -1,0 +1,50 @@
+# dbt project scaffold for the gold layer of the streaming lakehouse.
+#
+# Per README.md, dbt's job in this pipeline is to transform the silver
+# layer (deduped/cast clickstream events, written by
+# streaming_job/stream_to_silver.py) into gold, business-ready marts.
+# The bronze/silver staging models below exist mainly so every lakehouse
+# table has one dbt-known entry point (useful for lineage/docs) without
+# dbt re-doing any of the cleanup Spark already does upstream.
+#
+# Running this project for real requires a Spark runtime with
+# delta-spark on the classpath and a profile that can reach it (see
+# profiles.yml.example) -- out of scope for this scaffold increment,
+# which only wires the project structure + table sources together. See
+# ROADMAP.md for the follow-up gold-layer modeling increment.
+name: 'realtime_streaming_lakehouse'
+version: '1.0.0'
+config-version: 2
+
+profile: 'realtime_streaming_lakehouse'
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests_dbt"]
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  # Overridable so a non-default BRONZE_PATH/SILVER_PATH (set for the
+  # Spark jobs via env vars, see streaming_job/) can be passed through
+  # to dbt with the same values, e.g.:
+  #   dbt run --vars '{bronze_path: /tmp/bronze, silver_path: /tmp/silver}'
+  bronze_path: "data/lakehouse/bronze/clickstream_events"
+  silver_path: "data/lakehouse/silver/clickstream_events"
+
+on-run-start:
+  - "{{ create_external_lakehouse_tables() }}"
+
+models:
+  realtime_streaming_lakehouse:
+    bronze:
+      +materialized: view
+      +schema: bronze
+    silver:
+      +materialized: view
+      +schema: silver
+    gold:
+      +materialized: table
+      +schema: gold
